@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Earth Moon Seasons</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+<canvas id="space"></canvas>
+<script>
+(() => {
+  const TAU = Math.PI * 2;
+  const canvas = document.getElementById("space");
+  const ctx = canvas.getContext("2d");
+  let w = 0, h = 0, dpr = 1, unit = 1;
+
+  const seasons = [
+    ["MAR EQUINOX", "SPRING", 0],
+    ["JUN SOLSTICE", "SUMMER", Math.PI / 2],
+    ["SEP EQUINOX", "AUTUMN", Math.PI],
+    ["DEC SOLSTICE", "WINTER", Math.PI * 1.5]
+  ];
+
+  function norm(a) {
+    return ((a % TAU) + TAU) % TAU;
+  }
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = window.innerWidth;
+    h = window.innerHeight;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    unit = Math.min(w, h);
+  }
+
+  function circle(x, y, r, fill) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+
+  function label(text, x, y, color = "#aeb5c8", size = 12, align = "left") {
+    ctx.font = `${size}px system-ui, Segoe UI, sans-serif`;
+    ctx.textAlign = align;
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+  }
+
+  function orbit(x, y, r, color = "rgba(195, 166, 115, 0.18)") {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  function trail(x, y, r, a, color, width) {
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineWidth = width;
+    for (let i = 8; i >= 0; i--) {
+      const alpha = Math.round((9 - i) * 4).toString(16).padStart(2, "0");
+      ctx.beginPath();
+      ctx.arc(x, y, r, a - (i + 1) * 0.028, a - i * 0.028);
+      ctx.strokeStyle = `${color}${alpha}`;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function litBody(x, y, r, lightAngle, lit, dark, glow = 0.16) {
+    circle(x, y, r + 6, `${lit}24`);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.clip();
+    ctx.fillStyle = dark;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    const lx = x + Math.cos(lightAngle) * r * 0.65;
+    const ly = y + Math.sin(lightAngle) * r * 0.65;
+    const shade = ctx.createRadialGradient(lx, ly, r * 0.1, x, y, r * 1.35);
+    shade.addColorStop(0, lit);
+    shade.addColorStop(0.52, lit);
+    shade.addColorStop(0.74, "rgba(28, 38, 58, 0.72)");
+    shade.addColorStop(1, "#05070b");
+    ctx.fillStyle = shade;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    ctx.restore();
+    circle(x + Math.cos(lightAngle) * r * 0.28, y + Math.sin(lightAngle) * r * 0.28, r * glow, "rgba(255,255,255,0.12)");
+  }
+
+  function moonPhaseName(phase) {
+    const names = ["NEW MOON", "WAXING CRESCENT", "FIRST QUARTER", "WAXING GIBBOUS", "FULL MOON", "WANING GIBBOUS", "LAST QUARTER", "WANING CRESCENT"];
+    return names[Math.floor((norm(phase) / TAU) * 8 + 0.5) % 8];
+  }
+
+  function currentSeason(year) {
+    const q = Math.floor(norm(year) / (Math.PI / 2)) % 4;
+    return seasons[q][1];
+  }
+
+  function drawPhaseMoon(x, y, r, phase, lightAngle) {
+    const illum = (1 - Math.cos(phase)) / 2;
+    litBody(x, y, r, lightAngle, "#d8d3c4", "#1a1b20", 0.08);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.clip();
+    ctx.globalCompositeOperation = "source-atop";
+    ctx.fillStyle = `rgba(0,0,0,${0.85 - illum * 0.75})`;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    ctx.restore();
+  }
+
+  function drawSun(x, y, r) {
+    const glow = ctx.createRadialGradient(x, y, 2, x, y, r * 3.4);
+    glow.addColorStop(0, "rgba(255, 210, 112, 0.98)");
+    glow.addColorStop(0.34, "rgba(255, 190, 80, 0.32)");
+    glow.addColorStop(1, "rgba(255, 160, 60, 0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 3.4, 0, TAU);
+    ctx.fill();
+    circle(x, y, r, "#ffd06d");
+    label("SUN", x + r + 9, y + 4, "#d8a84e", 12);
+  }
+
+  function render(now) {
+    const t = now * 0.00008;
+    const cx = w * (w > 900 ? 0.42 : 0.5);
+    const cy = h * 0.52;
+    const orbitR = unit * (w > 900 ? 0.30 : 0.32);
+    const earthR = Math.max(12, unit * 0.020);
+    const moonOrbit = Math.max(34, unit * 0.060);
+    const moonR = Math.max(4, unit * 0.007);
+    const sunR = Math.max(16, unit * 0.030);
+    const year = norm(t * 0.45 + 0.2);
+    const moonA = norm(year + Math.PI + t * 7.2);
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+
+    orbit(cx, cy, orbitR);
+    for (const [mark, season, a] of seasons) {
+      const mx = cx + Math.cos(a) * orbitR;
+      const my = cy + Math.sin(a) * orbitR;
+      circle(mx, my, 3, "#8c7652");
+      if (w > 700) {
+        label(mark, mx + 8, my + 4, "#8d95aa", 9);
+        label(season, mx + 8, my + 16, "#c2a262", 9);
+      }
+    }
+
+    const earthX = cx + Math.cos(year) * orbitR;
+    const earthY = cy + Math.sin(year) * orbitR;
+    const sunAngleFromEarth = Math.atan2(cy - earthY, cx - earthX);
+    const moonX = earthX + Math.cos(moonA) * moonOrbit;
+    const moonY = earthY + Math.sin(moonA) * moonOrbit;
+    const moonLight = Math.atan2(cy - moonY, cx - moonX);
+    const phase = norm(moonA - sunAngleFromEarth);
+
+    trail(cx, cy, orbitR, year, "#4d86dc", Math.max(1, earthR * 0.22));
+    drawSun(cx, cy, sunR);
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(earthX, earthY);
+    ctx.strokeStyle = "rgba(255, 208, 109, 0.16)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    orbit(earthX, earthY, moonOrbit, "rgba(174, 181, 200, 0.16)");
+    trail(earthX, earthY, moonOrbit, moonA, "#d8d3c4", 1);
+    litBody(earthX, earthY, earthR, sunAngleFromEarth, "#4d86dc", "#061220");
+    ctx.strokeStyle = "#cbd2e3";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    const tilt = -Math.PI / 2 + 23.5 * Math.PI / 180;
+    ctx.moveTo(earthX - Math.cos(tilt) * earthR * 1.45, earthY - Math.sin(tilt) * earthR * 1.45);
+    ctx.lineTo(earthX + Math.cos(tilt) * earthR * 1.45, earthY + Math.sin(tilt) * earthR * 1.45);
+    ctx.stroke();
+    label("EARTH", earthX + earthR + 12, earthY + 4, "#aeb5c8", 12);
+    label("23.5 DEG AXIS", earthX + earthR + 12, earthY + 17, "#6f7890", 9);
+
+    drawPhaseMoon(moonX, moonY, moonR, phase, moonLight);
+    label("MOON", moonX + moonR + 6, moonY + 3, "#8d95aa", 9);
+
+    if (w > 760 && h > 430) {
+      const ix = w * 0.78;
+      const py = h * 0.31;
+      const sy = h * 0.62;
+      label("MOON PHASE", ix, py - 46, "#c7cfdf", 12, "center");
+      drawPhaseMoon(ix, py, 30, phase, -0.45);
+      label(moonPhaseName(phase), ix, py + 52, "#d8d3c4", 11, "center");
+      label(`${Math.round(((1 - Math.cos(phase)) / 2) * 100)}% LIT`, ix, py + 68, "#7d879b", 9, "center");
+
+      label("SEASON", ix, sy - 48, "#c7cfdf", 12, "center");
+      orbit(ix, sy, 34, "rgba(195, 166, 115, 0.22)");
+      for (const [, season, a] of seasons) {
+        const sx = ix + Math.cos(a) * 34;
+        const yy = sy + Math.sin(a) * 34;
+        circle(sx, yy, season === currentSeason(year) ? 4 : 2.5, season === currentSeason(year) ? "#ffd06d" : "#806f52");
+      }
+      circle(ix + Math.cos(year) * 34, sy + Math.sin(year) * 34, 5, "#4d86dc");
+      label(`N. ${currentSeason(year)}`, ix, sy + 58, "#d8a84e", 11, "center");
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
