@@ -181,13 +181,6 @@
     trail(cx, cy, orbitR, year, "#4d86dc", Math.max(1, earthR * 0.22));
     drawSun(cx, cy, sunR);
 
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(earthX, earthY);
-    ctx.strokeStyle = "rgba(255, 208, 109, 0.16)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
     orbit(earthX, earthY, moonOrbit, "rgba(174, 181, 200, 0.16)");
     trail(earthX, earthY, moonOrbit, moonA, "#d8d3c4", 1);
     litBody(earthX, earthY, earthR, sunAngleFromEarth, "#4d86dc", "#061220");
