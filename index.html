@@ -10,7 +10,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #03060c;
+      background: #000;
     }
 
     canvas {
@@ -95,11 +95,7 @@
     const cy = h * 0.52;
 
     ctx.clearRect(0, 0, w, h);
-    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.8);
-    bg.addColorStop(0, "#0b1221");
-    bg.addColorStop(0.58, "#050912");
-    bg.addColorStop(1, "#010309");
-    ctx.fillStyle = bg;
+    ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, w, h);
 
     for (const star of stars) {
