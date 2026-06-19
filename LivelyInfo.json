@@ -1,0 +1,14 @@
+{
+  "AppVersion": "2.2.1.0",
+  "Title": "Dynamic Solar System",
+  "Thumbnail": null,
+  "Preview": null,
+  "Desc": "Stylized animated solar system with planets, representative moons, orbit rings, stars, and the main asteroid belt.",
+  "Author": "Codex",
+  "License": "MIT",
+  "Contact": null,
+  "Type": 1,
+  "FileName": "index.html",
+  "Arguments": null,
+  "IsAbsolutePath": false
+}

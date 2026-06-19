@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dynamic Solar System</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #03060c;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+<canvas id="space"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById("space");
+  const ctx = canvas.getContext("2d");
+  let w = 0, h = 0, dpr = 1, radiusUnit = 1;
+
+  const planets = [
+    ["Mercury", 0.13, 3.0, "#a8a6a0", 4.7, 0.2, []],
+    ["Venus", 0.20, 4.7, "#c5a15a", 3.5, 1.4, []],
+    ["Earth", 0.28, 5.0, "#4d86dc", 2.9, 2.2, [["Moon", 10, 1.9, "#b9b6ad", 7.2, 0.6]]],
+    ["Mars", 0.37, 4.0, "#b35c3d", 2.4, 3.8, [["Phobos", 8, 1.2, "#9d8c77", 9.5, 1.0], ["Deimos", 12, 1.0, "#766b60", 6.5, 2.9]]],
+    ["Jupiter", 0.58, 9.0, "#d3ad82", 1.35, 5.1, [["Io", 14, 1.6, "#d9c061", 6.3, 0.1], ["Europa", 19, 1.5, "#cbc7b7", 4.8, 1.6], ["Ganymede", 25, 2.0, "#9f927d", 3.7, 3.1], ["Callisto", 32, 1.8, "#74695e", 2.9, 4.4]]],
+    ["Saturn", 0.74, 8.0, "#d9bd87", 1.0, 0.7, [["Titan", 25, 1.9, "#c99c56", 3.8, 2.1], ["Rhea", 18, 1.2, "#bab1a4", 5.0, 4.0]]],
+    ["Uranus", 0.88, 6.5, "#74c8cb", 0.74, 2.9, [["Titania", 17, 1.3, "#a9c4c4", 3.6, 0.3], ["Oberon", 23, 1.2, "#8ea7a9", 2.8, 2.9]]],
+    ["Neptune", 1.00, 6.2, "#476ed4", 0.58, 4.7, [["Triton", 18, 1.5, "#b8c2d8", 3.3, 1.5]]]
+  ];
+
+  function rand(seed) {
+    return () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+  }
+
+  const random = rand(4938);
+  const stars = Array.from({ length: 260 }, () => ({
+    x: random(), y: random(), r: 0.45 + random() * 1.2, a: 0.15 + random() * 0.65
+  }));
+  const belt = Array.from({ length: 1150 }, () => ({
+    a: random() * Math.PI * 2,
+    r: 0.42 + random() * 0.10,
+    s: 0.4 + random() * 1.2,
+    o: random() * Math.PI * 2
+  }));
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = window.innerWidth;
+    h = window.innerHeight;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    radiusUnit = Math.min(w, h) * 0.46;
+  }
+
+  function circle(x, y, r, fill) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+
+  function label(text, x, y, color = "#aeb5c8", size = 12) {
+    ctx.font = `${size}px system-ui, Segoe UI, sans-serif`;
+    ctx.fillStyle = color;
+    ctx.letterSpacing = "0px";
+    ctx.fillText(text.toUpperCase(), x, y);
+  }
+
+  function orbit(cx, cy, r, alpha = 0.18) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(195, 166, 115, ${alpha})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  function render(now) {
+    const t = now * 0.00008;
+    const cx = w * 0.5;
+    const cy = h * 0.52;
+
+    ctx.clearRect(0, 0, w, h);
+    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.8);
+    bg.addColorStop(0, "#0b1221");
+    bg.addColorStop(0.58, "#050912");
+    bg.addColorStop(1, "#010309");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    for (const star of stars) {
+      circle(star.x * w, star.y * h, star.r, `rgba(168, 183, 214, ${star.a + Math.sin(t * 30 + star.x * 8) * 0.08})`);
+    }
+
+    for (const [name, orbitScale] of planets) {
+      orbit(cx, cy, orbitScale * radiusUnit, name === "Neptune" ? 0.12 : 0.17);
+    }
+
+    for (const rock of belt) {
+      const a = rock.a + t * 0.18 + Math.sin(t + rock.o) * 0.003;
+      const r = rock.r * radiusUnit;
+      circle(cx + Math.cos(a) * r, cy + Math.sin(a) * r, rock.s, "rgba(183, 158, 111, 0.46)");
+    }
+
+    const sunGlow = ctx.createRadialGradient(cx, cy, 3, cx, cy, 52);
+    sunGlow.addColorStop(0, "rgba(255, 210, 112, 0.95)");
+    sunGlow.addColorStop(0.32, "rgba(255, 190, 80, 0.35)");
+    sunGlow.addColorStop(1, "rgba(255, 160, 60, 0)");
+    ctx.fillStyle = sunGlow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 52, 0, Math.PI * 2);
+    ctx.fill();
+    circle(cx, cy, 14, "#ffd06d");
+    label("Sun", cx + 22, cy + 4, "#d8a84e", 12);
+
+    for (const [name, orbitScale, size, color, speed, phase, moons] of planets) {
+      const r = orbitScale * radiusUnit;
+      const a = phase + t * speed;
+      const x = cx + Math.cos(a) * r;
+      const y = cy + Math.sin(a) * r;
+
+      if (name === "Saturn") {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(-0.35);
+        ctx.strokeStyle = "rgba(214, 187, 127, 0.55)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size * 2.2, size * 0.8, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      circle(x, y, size + 5, `${color}22`);
+      circle(x, y, size, color);
+
+      const labelX = x + size + 13;
+      const labelY = y + 5;
+      if (labelX < w - 86 && labelY > 16 && labelY < h - 10) {
+        label(name, labelX, labelY);
+      }
+
+      for (const [moon, moonOrbit, moonSize, moonColor, moonSpeed, moonPhase] of moons) {
+        const mr = Math.max(moonOrbit, size + 8);
+        const ma = moonPhase + t * moonSpeed;
+        orbit(x, y, mr, 0.10);
+        const mx = x + Math.cos(ma) * mr;
+        const my = y + Math.sin(ma) * mr;
+        circle(mx, my, moonSize, moonColor);
+        if (moon === "Moon" || moon === "Titan" || moon === "Triton") {
+          label(moon, mx + 5, my + 3, "#8d95aa", 9);
+        }
+      }
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
