@@ -47,9 +47,6 @@
   }
 
   const random = rand(4938);
-  const stars = Array.from({ length: 260 }, () => ({
-    x: random(), y: random(), r: 0.45 + random() * 1.2, a: 0.15 + random() * 0.65
-  }));
   const belt = Array.from({ length: 1150 }, () => ({
     a: random() * Math.PI * 2,
     r: 0.42 + random() * 0.10,
@@ -97,10 +94,6 @@
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, w, h);
-
-    for (const star of stars) {
-      circle(star.x * w, star.y * h, star.r, `rgba(168, 183, 214, ${star.a + Math.sin(t * 30 + star.x * 8) * 0.08})`);
-    }
 
     for (const [name, orbitScale] of planets) {
       orbit(cx, cy, orbitScale * radiusUnit, name === "Neptune" ? 0.12 : 0.17);
