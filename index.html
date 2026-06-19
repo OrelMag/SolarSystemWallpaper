@@ -86,6 +86,20 @@
     ctx.stroke();
   }
 
+  function trail(cx, cy, r, a, color, width) {
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineWidth = Math.max(1, width * 0.4);
+    for (let i = 6; i >= 0; i--) {
+      const alpha = Math.round((7 - i) * 5).toString(16).padStart(2, "0");
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, a - (i + 1) * 0.035, a - i * 0.035);
+      ctx.strokeStyle = `${color}${alpha}`;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function render(now) {
     const t = now * 0.00008;
     const cx = w * 0.5;
@@ -121,6 +135,8 @@
       const a = phase + t * speed;
       const x = cx + Math.cos(a) * r;
       const y = cy + Math.sin(a) * r;
+
+      trail(cx, cy, r, a, color, size);
 
       if (name === "Saturn") {
         ctx.save();
