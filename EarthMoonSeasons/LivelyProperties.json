@@ -1,0 +1,11 @@
+{
+  "timeMode": {
+    "type": "dropdown",
+    "value": 0,
+    "text": "Time mode",
+    "items": [
+      "Real Date",
+      "45-minute Demo"
+    ]
+  }
+}

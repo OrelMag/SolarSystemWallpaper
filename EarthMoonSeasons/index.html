@@ -29,7 +29,12 @@
   const ctx = canvas.getContext("2d");
   const earthTexture = new Image();
   earthTexture.src = "earth-blue-marble.png";
+  const nightTexture = new Image();
+  nightTexture.src = "earth-city-lights.jpg";
+  const nightCanvas = document.createElement("canvas");
+  const nightCtx = nightCanvas.getContext("2d");
   let w = 0, h = 0, dpr = 1, unit = 1;
+  let timeMode = new URLSearchParams(location.search).get("mode") === "demo" ? 1 : 0;
 
   const seasons = [
     ["MAR EQUINOX", "ISRAEL SPRING", 0],
@@ -48,6 +53,18 @@
   const yearDuration = 45 * 60 * 1000;
   const earthDaysPerYear = 365.25;
   const moonOrbitsPerYear = 13.37;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const j2000 = Date.UTC(2000, 0, 1, 12);
+  const newMoonEpoch = Date.UTC(2000, 0, 6, 18, 14);
+  const synodicMonth = 29.530588853 * dayMs;
+  const israelDateFormat = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Jerusalem",
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+  let dateCacheMinute = -1;
+  let dateCache = { month: "", label: "" };
 
   function norm(a) {
     return ((a % TAU) + TAU) % TAU;
@@ -120,6 +137,17 @@
     circle(x + Math.cos(lightAngle) * r * 0.28, y + Math.sin(lightAngle) * r * 0.28, r * glow, "rgba(255,255,255,0.12)");
   }
 
+  function drawProjectedTexture(target, image, r, spin) {
+    const slices = Math.max(20, Math.ceil(r * 1.6));
+    for (let i = 0; i < slices; i++) {
+      const left = -1 + i * 2 / slices;
+      const right = -1 + (i + 1) * 2 / slices;
+      const longitude = Math.asin((left + right) / 2);
+      const sourceX = Math.min(image.naturalWidth - 1, Math.floor(norm(spin + longitude) / TAU * image.naturalWidth));
+      target.drawImage(image, sourceX, 0, 1, image.naturalHeight, left * r, -r, (right - left) * r + 1, r * 2);
+    }
+  }
+
   function drawEarthSurface(x, y, r, spin) {
     ctx.save();
     ctx.translate(x, y);
@@ -129,14 +157,7 @@
     ctx.clip();
 
     if (earthTexture.complete && earthTexture.naturalWidth) {
-      const slices = Math.max(20, Math.ceil(r * 1.6));
-      for (let i = 0; i < slices; i++) {
-        const left = -1 + i * 2 / slices;
-        const right = -1 + (i + 1) * 2 / slices;
-        const longitude = Math.asin((left + right) / 2);
-        const sourceX = Math.min(earthTexture.naturalWidth - 1, Math.floor(norm(spin + longitude) / TAU * earthTexture.naturalWidth));
-        ctx.drawImage(earthTexture, sourceX, 0, 1, earthTexture.naturalHeight, left * r, -r, (right - left) * r + 1, r * 2);
-      }
+      drawProjectedTexture(ctx, earthTexture, r, spin);
     } else {
       const ocean = ctx.createRadialGradient(-r * 0.35, -r * 0.4, 1, 0, 0, r * 1.2);
       ocean.addColorStop(0, "#3988c8");
@@ -159,6 +180,52 @@
       ctx.ellipse(Math.sin(spin * 0.13 + i * 1.7) * r * 0.28, (i - 1.5) * r * 0.28, r * (0.22 + i * 0.035), r * 0.045, i * 0.13, 0.15, Math.PI * 1.75);
       ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  function drawCityLights(x, y, r, lightAngle, spin) {
+    if (!nightTexture.complete || !nightTexture.naturalWidth) return;
+
+    const pad = 3;
+    const size = Math.ceil(r * 2 + pad * 2);
+    if (nightCanvas.width !== size || nightCanvas.height !== size) {
+      nightCanvas.width = size;
+      nightCanvas.height = size;
+    }
+
+    const center = size / 2;
+    nightCtx.setTransform(1, 0, 0, 1, 0, 0);
+    nightCtx.globalCompositeOperation = "source-over";
+    nightCtx.clearRect(0, 0, size, size);
+    nightCtx.save();
+    nightCtx.translate(center, center);
+    nightCtx.rotate(axisTilt);
+    nightCtx.beginPath();
+    nightCtx.arc(0, 0, r, 0, TAU);
+    nightCtx.clip();
+    drawProjectedTexture(nightCtx, nightTexture, r, spin);
+    nightCtx.globalCompositeOperation = "multiply";
+    nightCtx.fillStyle = "#ffb45c";
+    nightCtx.fillRect(-r, -r, r * 2, r * 2);
+    nightCtx.restore();
+
+    nightCtx.globalCompositeOperation = "destination-in";
+    const mask = nightCtx.createLinearGradient(
+      center + Math.cos(lightAngle) * r, center + Math.sin(lightAngle) * r,
+      center - Math.cos(lightAngle) * r, center - Math.sin(lightAngle) * r
+    );
+    mask.addColorStop(0, "rgba(0,0,0,0)");
+    mask.addColorStop(0.48, "rgba(0,0,0,0)");
+    mask.addColorStop(0.68, "rgba(0,0,0,0.82)");
+    mask.addColorStop(1, "rgba(0,0,0,1)");
+    nightCtx.fillStyle = mask;
+    nightCtx.fillRect(0, 0, size, size);
+    nightCtx.globalCompositeOperation = "source-over";
+
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(nightCanvas, x - center, y - center);
     ctx.restore();
   }
 
@@ -192,6 +259,8 @@
     ctx.fillStyle = shadow;
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
     ctx.restore();
+
+    drawCityLights(x, y, r, lightAngle, spin);
 
     ctx.save();
     ctx.shadowBlur = r * 0.42;
@@ -248,8 +317,32 @@
     return months[Math.floor((norm(year) + TAU / 24) / (TAU / 12)) % 12][0];
   }
 
+  function solarLongitude(timestamp) {
+    const days = (timestamp - j2000) / dayMs;
+    const meanAnomaly = (357.529 + 0.98560028 * days) * Math.PI / 180;
+    const meanLongitude = (280.459 + 0.98564736 * days) * Math.PI / 180;
+    return norm(meanLongitude + (1.915 * Math.sin(meanAnomaly) + 0.020 * Math.sin(meanAnomaly * 2)) * Math.PI / 180);
+  }
+
   function solarDeclination(year) {
-    return axisTilt * Math.sin(year);
+    return Math.asin(Math.sin(axisTilt) * Math.sin(year));
+  }
+
+  function moonPhaseAt(timestamp) {
+    return norm((timestamp - newMoonEpoch) / synodicMonth * TAU);
+  }
+
+  function israelDateAt(timestamp) {
+    const minute = Math.floor(timestamp / 60000);
+    if (minute !== dateCacheMinute) {
+      const parts = Object.fromEntries(israelDateFormat.formatToParts(new Date(timestamp)).map(part => [part.type, part.value]));
+      dateCache = {
+        month: parts.month.toUpperCase(),
+        label: `${parts.month} ${parts.day}, ${parts.year}`.toUpperCase()
+      };
+      dateCacheMinute = minute;
+    }
+    return dateCache;
   }
 
   function daylightHours(year) {
@@ -258,7 +351,14 @@
     return 24 * hourAngle / Math.PI;
   }
 
-  console.assert(solarDeclination(Math.PI / 2) > 0 && daylightHours(Math.PI / 2) > daylightHours(Math.PI * 1.5), "Season model check failed");
+  const june = solarLongitude(Date.UTC(2025, 5, 21, 12));
+  const december = solarLongitude(Date.UTC(2025, 11, 21, 12));
+  console.assert(solarDeclination(june) > 0 && daylightHours(june) > daylightHours(december), "Season model check failed");
+  console.assert(moonPhaseAt(newMoonEpoch) < 1e-9, "Moon phase model check failed");
+
+  window.livelyPropertyListener = (name, value) => {
+    if (name === "timeMode") timeMode = Number(value) === 1 ? 1 : 0;
+  };
 
   function drawDaylightGraph(x, y, width, height, year) {
     const minDay = 9.8;
@@ -382,13 +482,30 @@
     const moonOrbit = Math.max(34, unit * 0.060);
     const moonR = Math.max(4, unit * 0.007);
     const sunR = Math.max(16, unit * 0.030);
-    const elapsedYear = now / yearDuration * TAU + 0.2;
-    const year = norm(elapsedYear);
-    const moonA = norm(Math.PI + elapsedYear * moonOrbitsPerYear);
-    const earthSpin = elapsedYear * earthDaysPerYear;
+    const timestamp = Date.now();
+    const liveMode = timeMode === 0;
+    let year, moonA, phase, earthSpin, monthNow, dateStatus, modeStatus;
+
+    if (liveMode) {
+      const israelDate = israelDateAt(timestamp);
+      year = solarLongitude(timestamp);
+      phase = moonPhaseAt(timestamp);
+      earthSpin = timestamp / 60000 * TAU;
+      monthNow = israelDate.month;
+      dateStatus = israelDate.label;
+      modeStatus = "LIVE DATE / 60S VISUAL DAY";
+    } else {
+      const elapsedYear = now / yearDuration * TAU + 0.2;
+      year = norm(elapsedYear);
+      moonA = norm(Math.PI + elapsedYear * moonOrbitsPerYear);
+      earthSpin = elapsedYear * earthDaysPerYear;
+      monthNow = currentMonth(year);
+      dateStatus = "45-MINUTE DEMO";
+      modeStatus = "ACCELERATED EDUCATIONAL YEAR";
+    }
+
     const declination = solarDeclination(year);
     const seasonNow = currentSeason(year);
-    const monthNow = currentMonth(year);
 
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#000";
@@ -409,14 +526,16 @@
         ctx.strokeStyle = month === monthNow ? "rgba(255, 208, 109, 0.85)" : "rgba(174, 181, 200, 0.18)";
         ctx.lineWidth = month === monthNow ? 1.4 : 1;
         ctx.stroke();
-        label(month, cx + Math.cos(a) * (orbitR - 18), cy + Math.sin(a) * (orbitR - 18) + 3, month === monthNow ? "#ffd06d" : "#687186", 8, "center");
+        const distanceFromEarth = Math.abs(Math.atan2(Math.sin(year - a), Math.cos(year - a)));
+        if (distanceFromEarth > 0.16) label(month, cx + Math.cos(a) * (orbitR - 18), cy + Math.sin(a) * (orbitR - 18) + 3, month === monthNow ? "#ffd06d" : "#687186", 8, "center");
       }
     }
     for (const [mark, season, a] of seasons) {
       const mx = cx + Math.cos(a) * orbitR;
       const my = cy + Math.sin(a) * orbitR;
       circle(mx, my, 3, "#8c7652");
-      if (w > 700) {
+      const distanceFromEarth = Math.abs(Math.atan2(Math.sin(year - a), Math.cos(year - a)));
+      if (w > 700 && distanceFromEarth > 0.20) {
         label(mark, mx + 8, my + 4, "#8d95aa", 9);
         label(season, mx + 8, my + 16, "#c2a262", 9);
       }
@@ -425,10 +544,11 @@
     const earthX = cx + Math.cos(year) * orbitR;
     const earthY = cy + Math.sin(year) * orbitR;
     const sunAngleFromEarth = Math.atan2(cy - earthY, cx - earthX);
+    if (liveMode) moonA = norm(sunAngleFromEarth + phase);
     const moonX = earthX + Math.cos(moonA) * moonOrbit;
     const moonY = earthY + Math.sin(moonA) * moonOrbit;
     const moonLight = Math.atan2(cy - moonY, cx - moonX);
-    const phase = norm(moonA - sunAngleFromEarth);
+    if (!liveMode) phase = norm(moonA - sunAngleFromEarth);
 
     trail(cx, cy, orbitR, year, "#4d86dc", Math.max(1, earthR * 0.22));
     drawSun(cx, cy, sunR);
@@ -439,8 +559,12 @@
     drawEarth(earthX, earthY, earthR, sunAngleFromEarth, earthSpin, declination);
     drawAxis(earthX, earthY, earthR);
     if (w > 700) {
-      label("EARTH", earthX + earthR + 12, earthY + 4, "#aeb5c8", 12);
-      label("23.5 DEG AXIS", earthX + earthR + 12, earthY + 17, "#6f7890", 9);
+      const outwardX = Math.cos(year);
+      const outwardY = Math.sin(year);
+      const earthLabelX = earthX + outwardX * (earthR + 15);
+      const earthLabelY = earthY + outwardY * (earthR + 15) + 4;
+      const earthAlign = Math.abs(outwardX) < 0.3 ? "center" : outwardX > 0 ? "left" : "right";
+      label("EARTH", earthLabelX, earthLabelY, "#aeb5c8", 11, earthAlign);
     }
 
     drawMoon(moonX, moonY, moonR, phase, moonLight, Math.atan2(earthY - moonY, earthX - moonX));
@@ -458,7 +582,7 @@
       drawEarth(ix - 58, py, 42, -0.45, earthSpin, declination, true);
       drawAxis(ix - 58, py, 42, true);
       drawMoon(ix + 58, py, 27, phase, -0.45, -0.45);
-      label("ROTATING EARTH", ix - 58, py + 58, "#d8d3c4", 9, "center");
+      label(liveMode ? "60S VISUAL DAY" : "7.4S VISUAL DAY", ix - 58, py + 58, "#d8d3c4", 9, "center");
       label(moonPhaseName(phase), ix + 58, py + 50, "#d8d3c4", 9, "center");
       label(`${Math.round(((1 - Math.cos(phase)) / 2) * 100)}% LIT / MOON LOCKED`, ix, py + 70, "#7d879b", 9, "center");
 
@@ -476,16 +600,18 @@
       }
       circle(ix + Math.cos(year) * 34, sy + Math.sin(year) * 34, 5, "#4d86dc");
       label(`${monthNow} / ${seasonNow}`, ix, sy + 58, "#d8a84e", 11, "center");
-      label("ISRAEL VIEW", ix, sy + 73, "#7d879b", 9, "center");
+      label(dateStatus, ix, sy + 73, "#7d879b", 9, "center");
+      label(modeStatus, ix, sy + 87, "#75c7ff", 8, "center");
 
       if (h > 620) {
         drawDaylightGraph(w * 0.68, h * 0.78, Math.min(260, w * 0.23), 56, year);
       }
     } else if (h > 560) {
       const directLatitude = Math.abs(declination) < 0.008 ? "EQUATOR" : `${Math.abs(declination * 180 / Math.PI).toFixed(1)} DEG ${declination > 0 ? "N" : "S"}`;
-      label("AXIAL TILT, NOT DISTANCE", w / 2, h - 62, "#ffd06d", 10, "center");
-      label(`${monthNow} / ${seasonNow} / DIRECT RAYS: ${directLatitude}`, w / 2, h - 44, "#c7cfdf", 8, "center");
-      label(`JERUSALEM 31.8N: ${daylightHours(year).toFixed(1)}H DAYLIGHT`, w / 2, h - 28, "#75c7ff", 8, "center");
+      label("AXIAL TILT, NOT DISTANCE", w / 2, h - 78, "#ffd06d", 10, "center");
+      label(`${monthNow} / ${seasonNow} / DIRECT RAYS: ${directLatitude}`, w / 2, h - 60, "#c7cfdf", 8, "center");
+      label(`JERUSALEM 31.8N: ${daylightHours(year).toFixed(1)}H DAYLIGHT`, w / 2, h - 44, "#75c7ff", 8, "center");
+      label(`${dateStatus} / ${modeStatus}`, w / 2, h - 28, "#7d879b", 8, "center");
     }
 
     requestAnimationFrame(render);
