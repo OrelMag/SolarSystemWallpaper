@@ -27,6 +27,8 @@
   const TAU = Math.PI * 2;
   const canvas = document.getElementById("space");
   const ctx = canvas.getContext("2d");
+  const earthTexture = new Image();
+  earthTexture.src = "earth-blue-marble.png";
   let w = 0, h = 0, dpr = 1, unit = 1;
 
   const seasons = [
@@ -43,7 +45,7 @@
   ];
   const israelLat = 31.8 * Math.PI / 180;
   const axisTilt = 23.5 * Math.PI / 180;
-  const yearSpeed = 0.45;
+  const yearDuration = 45 * 60 * 1000;
   const earthDaysPerYear = 365.25;
   const moonOrbitsPerYear = 13.37;
 
@@ -119,62 +121,61 @@
   }
 
   function drawEarthSurface(x, y, r, spin) {
-    const land = [
-      [[-2.75, -0.05], [-2.48, -0.28], [-2.18, -0.12], [-2.06, 0.22], [-2.34, 0.43], [-2.66, 0.28]],
-      [[-1.72, 0.55], [-1.25, 0.36], [-1.08, 0.05], [-1.36, -0.12], [-1.78, 0.06]],
-      [[-0.78, 0.42], [-0.28, 0.33], [-0.06, 0.08], [-0.36, -0.20], [-0.84, -0.08]],
-      [[0.10, 0.08], [0.42, -0.10], [0.50, -0.48], [0.18, -0.74], [-0.08, -0.42]],
-      [[0.82, 0.46], [1.28, 0.35], [1.50, 0.08], [1.20, -0.08], [0.76, 0.12]],
-      [[1.86, -0.24], [2.24, -0.34], [2.48, -0.14], [2.24, 0.08], [1.90, 0.00]]
-    ];
     ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(axisTilt);
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, TAU);
+    ctx.arc(0, 0, r, 0, TAU);
     ctx.clip();
-    ctx.strokeStyle = "rgba(210,230,255,0.20)";
-    ctx.lineWidth = 0.8;
-    for (let i = -2; i <= 2; i++) {
-      ctx.beginPath();
-      ctx.ellipse(x, y + i * r * 0.28, r * 0.78, r * 0.10, 0, 0, TAU);
-      ctx.stroke();
+
+    if (earthTexture.complete && earthTexture.naturalWidth) {
+      const slices = Math.max(20, Math.ceil(r * 1.6));
+      for (let i = 0; i < slices; i++) {
+        const left = -1 + i * 2 / slices;
+        const right = -1 + (i + 1) * 2 / slices;
+        const longitude = Math.asin((left + right) / 2);
+        const sourceX = Math.min(earthTexture.naturalWidth - 1, Math.floor(norm(spin + longitude) / TAU * earthTexture.naturalWidth));
+        ctx.drawImage(earthTexture, sourceX, 0, 1, earthTexture.naturalHeight, left * r, -r, (right - left) * r + 1, r * 2);
+      }
+    } else {
+      const ocean = ctx.createRadialGradient(-r * 0.35, -r * 0.4, 1, 0, 0, r * 1.2);
+      ocean.addColorStop(0, "#3988c8");
+      ocean.addColorStop(1, "#071b32");
+      ctx.fillStyle = ocean;
+      ctx.fillRect(-r, -r, r * 2, r * 2);
+      ctx.strokeStyle = "rgba(210,230,255,0.16)";
+      for (let i = -2; i <= 2; i++) {
+        ctx.beginPath();
+        ctx.ellipse(0, i * r * 0.28, r * 0.78, r * 0.08, 0, 0, TAU);
+        ctx.stroke();
+      }
     }
 
-    ctx.strokeStyle = "rgba(255,255,255,0.28)";
-    ctx.beginPath();
-    ctx.ellipse(x + Math.sin(spin) * r * 0.22, y, Math.abs(Math.cos(spin)) * r * 0.72, r * 0.92, 0, 0, TAU);
-    ctx.stroke();
-
-    for (const shape of land) {
-      let started = false;
+    ctx.strokeStyle = "rgba(255,255,255,0.20)";
+    ctx.lineWidth = Math.max(0.7, r * 0.025);
+    ctx.lineCap = "round";
+    for (let i = 0; i < 4; i++) {
       ctx.beginPath();
-      for (const [lon0, lat] of shape) {
-        const lon = lon0 + spin;
-        const visible = Math.cos(lon) * Math.cos(lat);
-        if (visible < -0.08) {
-          started = false;
-          continue;
-        }
-        const px = x + Math.sin(lon) * Math.cos(lat) * r * 0.78;
-        const py = y - Math.sin(lat) * r * 0.82;
-        if (!started) {
-          ctx.moveTo(px, py);
-          started = true;
-        } else {
-          ctx.lineTo(px, py);
-        }
-      }
-      ctx.closePath();
-      ctx.fillStyle = "rgba(92, 184, 106, 0.72)";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(154, 226, 152, 0.52)";
-      ctx.lineWidth = Math.max(0.8, r * 0.035);
+      ctx.ellipse(Math.sin(spin * 0.13 + i * 1.7) * r * 0.28, (i - 1.5) * r * 0.28, r * (0.22 + i * 0.035), r * 0.045, i * 0.13, 0.15, Math.PI * 1.75);
       ctx.stroke();
     }
     ctx.restore();
   }
 
-  function drawEarth(x, y, r, lightAngle, spin) {
-    litBody(x, y, r, lightAngle, "#4d86dc", "#061220");
+  function drawLatitude(x, y, r, latitude, color) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(axisTilt);
+    ctx.beginPath();
+    ctx.ellipse(0, -Math.sin(latitude) * r * 0.82, Math.cos(latitude) * r * 0.78, Math.max(1, Math.cos(latitude) * r * 0.065), 0, 0, TAU);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, r * 0.025);
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawEarth(x, y, r, lightAngle, spin, declination, showLatitudes = false) {
     drawEarthSurface(x, y, r, spin);
     ctx.save();
     ctx.beginPath();
@@ -184,12 +185,28 @@
       x + Math.cos(lightAngle) * r, y + Math.sin(lightAngle) * r,
       x - Math.cos(lightAngle) * r, y - Math.sin(lightAngle) * r
     );
-    shadow.addColorStop(0, "rgba(0,0,0,0)");
-    shadow.addColorStop(0.55, "rgba(0,0,0,0.08)");
-    shadow.addColorStop(1, "rgba(0,0,0,0.68)");
+    shadow.addColorStop(0, "rgba(255,255,255,0.08)");
+    shadow.addColorStop(0.48, "rgba(0,0,0,0.02)");
+    shadow.addColorStop(0.66, "rgba(0,0,0,0.42)");
+    shadow.addColorStop(1, "rgba(0,0,0,0.92)");
     ctx.fillStyle = shadow;
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
     ctx.restore();
+
+    ctx.save();
+    ctx.shadowBlur = r * 0.42;
+    ctx.shadowColor = "rgba(81, 166, 255, 0.65)";
+    ctx.strokeStyle = "rgba(126, 194, 255, 0.62)";
+    ctx.lineWidth = Math.max(1, r * 0.055);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+
+    if (showLatitudes) {
+      drawLatitude(x, y, r, israelLat, "rgba(92, 194, 255, 0.80)");
+      drawLatitude(x, y, r, declination, "rgba(255, 208, 109, 0.88)");
+    }
   }
 
   function drawMoonSurface(x, y, r, faceAngle) {
@@ -231,11 +248,17 @@
     return months[Math.floor((norm(year) + TAU / 24) / (TAU / 12)) % 12][0];
   }
 
+  function solarDeclination(year) {
+    return axisTilt * Math.sin(year);
+  }
+
   function daylightHours(year) {
-    const declination = axisTilt * Math.sin(year);
+    const declination = solarDeclination(year);
     const hourAngle = Math.acos(Math.max(-1, Math.min(1, -Math.tan(israelLat) * Math.tan(declination))));
     return 24 * hourAngle / Math.PI;
   }
+
+  console.assert(solarDeclination(Math.PI / 2) > 0 && daylightHours(Math.PI / 2) > daylightHours(Math.PI * 1.5), "Season model check failed");
 
   function drawDaylightGraph(x, y, width, height, year) {
     const minDay = 9.8;
@@ -310,18 +333,60 @@
     label("SUN", x + r + 9, y + 4, "#d8a84e", 12);
   }
 
+  function drawSunlightRays(x, y, r, angle) {
+    const ux = Math.cos(angle);
+    const uy = Math.sin(angle);
+    const px = -uy;
+    const py = ux;
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 208, 109, 0.66)";
+    ctx.fillStyle = "rgba(255, 208, 109, 0.78)";
+    ctx.lineWidth = 1.2;
+    for (const offset of [-1.25, 0, 1.25]) {
+      const sx = x - ux * r * 5.5 + px * r * offset;
+      const sy = y - uy * r * 5.5 + py * r * offset;
+      const ex = x - ux * r * 1.45 + px * r * offset;
+      const ey = y - uy * r * 1.45 + py * r * offset;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - ux * 5 + px * 3, ey - uy * 5 + py * 3);
+      ctx.lineTo(ex - ux * 5 - px * 3, ey - uy * 5 - py * 3);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawAxis(x, y, r, showNorth = false) {
+    const tilt = -Math.PI / 2 + axisTilt;
+    const nx = Math.cos(tilt);
+    const ny = Math.sin(tilt);
+    ctx.strokeStyle = "#cbd2e3";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x - nx * r * 1.45, y - ny * r * 1.45);
+    ctx.lineTo(x + nx * r * 1.45, y + ny * r * 1.45);
+    ctx.stroke();
+    if (showNorth) label("N", x + nx * r * 1.7, y + ny * r * 1.7 + 3, "#cbd2e3", 9, "center");
+  }
+
   function render(now) {
-    const t = now * 0.00008;
     const cx = w * (w > 900 ? 0.42 : 0.5);
     const cy = h * 0.52;
-    const orbitR = unit * (w > 900 ? 0.30 : 0.32);
+    const orbitR = unit * (w > 900 ? 0.30 : w > 700 ? 0.32 : 0.24);
     const earthR = Math.max(12, unit * 0.020);
     const moonOrbit = Math.max(34, unit * 0.060);
     const moonR = Math.max(4, unit * 0.007);
     const sunR = Math.max(16, unit * 0.030);
-    const year = norm(t * yearSpeed + 0.2);
-    const moonA = norm(year + Math.PI + year * moonOrbitsPerYear);
-    const earthSpin = year * earthDaysPerYear;
+    const elapsedYear = now / yearDuration * TAU + 0.2;
+    const year = norm(elapsedYear);
+    const moonA = norm(Math.PI + elapsedYear * moonOrbitsPerYear);
+    const earthSpin = elapsedYear * earthDaysPerYear;
+    const declination = solarDeclination(year);
     const seasonNow = currentSeason(year);
     const monthNow = currentMonth(year);
 
@@ -370,30 +435,37 @@
 
     orbit(earthX, earthY, moonOrbit, "rgba(174, 181, 200, 0.16)");
     trail(earthX, earthY, moonOrbit, moonA, "#d8d3c4", 1);
-    drawEarth(earthX, earthY, earthR, sunAngleFromEarth, earthSpin);
-    ctx.strokeStyle = "#cbd2e3";
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    const tilt = -Math.PI / 2 + axisTilt;
-    ctx.moveTo(earthX - Math.cos(tilt) * earthR * 1.45, earthY - Math.sin(tilt) * earthR * 1.45);
-    ctx.lineTo(earthX + Math.cos(tilt) * earthR * 1.45, earthY + Math.sin(tilt) * earthR * 1.45);
-    ctx.stroke();
-    label("EARTH", earthX + earthR + 12, earthY + 4, "#aeb5c8", 12);
-    label("23.5 DEG AXIS", earthX + earthR + 12, earthY + 17, "#6f7890", 9);
+    drawSunlightRays(earthX, earthY, earthR, sunAngleFromEarth + Math.PI);
+    drawEarth(earthX, earthY, earthR, sunAngleFromEarth, earthSpin, declination);
+    drawAxis(earthX, earthY, earthR);
+    if (w > 700) {
+      label("EARTH", earthX + earthR + 12, earthY + 4, "#aeb5c8", 12);
+      label("23.5 DEG AXIS", earthX + earthR + 12, earthY + 17, "#6f7890", 9);
+    }
 
     drawMoon(moonX, moonY, moonR, phase, moonLight, Math.atan2(earthY - moonY, earthX - moonX));
-    label("MOON", moonX + moonR + 6, moonY + 3, "#8d95aa", 9);
+    if (w > 700) label("MOON", moonX + moonR + 6, moonY + 3, "#8d95aa", 9);
 
-    if (w > 760 && h > 430) {
+    if (w > 760 && h > 560) {
       const ix = w * 0.78;
       const py = h * 0.28;
-      const sy = h * 0.58;
-      label("EARTH SPIN / MOON LOCK", ix, py - 46, "#c7cfdf", 12, "center");
-      drawEarth(ix - 52, py, 32, -0.45, earthSpin);
-      drawMoon(ix + 52, py, 26, phase, -0.45, -0.45);
-      label("ROTATING EARTH", ix - 52, py + 50, "#d8d3c4", 9, "center");
-      label(moonPhaseName(phase), ix + 52, py + 50, "#d8d3c4", 9, "center");
-      label(`${Math.round(((1 - Math.cos(phase)) / 2) * 100)}% LIT / MOON LOCKED`, ix, py + 68, "#7d879b", 9, "center");
+      const sy = Math.max(py + 180, h * 0.60);
+      const daylight = daylightHours(year);
+      const northStatus = declination > 0.012 ? "NORTH TILTED TOWARD SUN" : declination < -0.012 ? "NORTH TILTED AWAY FROM SUN" : "HEMISPHERES RECEIVE EQUAL LIGHT";
+      const directLatitude = Math.abs(declination) < 0.008 ? "EQUATOR" : `${Math.abs(declination * 180 / Math.PI).toFixed(1)} DEG ${declination > 0 ? "N" : "S"}`;
+
+      label("EARTH ROTATION / MOON LOCK", ix, py - 62, "#c7cfdf", 12, "center");
+      drawEarth(ix - 58, py, 42, -0.45, earthSpin, declination, true);
+      drawAxis(ix - 58, py, 42, true);
+      drawMoon(ix + 58, py, 27, phase, -0.45, -0.45);
+      label("ROTATING EARTH", ix - 58, py + 58, "#d8d3c4", 9, "center");
+      label(moonPhaseName(phase), ix + 58, py + 50, "#d8d3c4", 9, "center");
+      label(`${Math.round(((1 - Math.cos(phase)) / 2) * 100)}% LIT / MOON LOCKED`, ix, py + 70, "#7d879b", 9, "center");
+
+      label("AXIAL TILT, NOT DISTANCE", ix, py + 98, "#ffd06d", 11, "center");
+      label(northStatus, ix, py + 116, "#c7cfdf", 9, "center");
+      label(`DIRECT RAYS: ${directLatitude}`, ix, py + 132, "#d8a84e", 9, "center");
+      label(`ISRAEL 31.8N: ${daylight.toFixed(1)}H DAYLIGHT`, ix, py + 148, "#75c7ff", 9, "center");
 
       label("SEASON", ix, sy - 48, "#c7cfdf", 12, "center");
       orbit(ix, sy, 34, "rgba(195, 166, 115, 0.22)");
@@ -409,6 +481,11 @@
       if (h > 620) {
         drawDaylightGraph(w * 0.68, h * 0.78, Math.min(260, w * 0.23), 56, year);
       }
+    } else if (h > 560) {
+      const directLatitude = Math.abs(declination) < 0.008 ? "EQUATOR" : `${Math.abs(declination * 180 / Math.PI).toFixed(1)} DEG ${declination > 0 ? "N" : "S"}`;
+      label("AXIAL TILT, NOT DISTANCE", w / 2, h - 62, "#ffd06d", 10, "center");
+      label(`${monthNow} / ${seasonNow} / DIRECT RAYS: ${directLatitude}`, w / 2, h - 44, "#c7cfdf", 8, "center");
+      label(`JERUSALEM 31.8N: ${daylightHours(year).toFixed(1)}H DAYLIGHT`, w / 2, h - 28, "#75c7ff", 8, "center");
     }
 
     requestAnimationFrame(render);
